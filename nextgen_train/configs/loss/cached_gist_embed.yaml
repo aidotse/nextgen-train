@@ -1,0 +1,4 @@
+_target_: nextgen_train.src.integrations.sentence_transformers.factories.STLossFactory
+_target_class_: sentence_transformers.losses.CachedGISTEmbedLoss
+mini_batch_size: 256
+#gather_across_devices: False

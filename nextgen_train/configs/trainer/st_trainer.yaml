@@ -1,0 +1,34 @@
+_target_: nextgen_train.src.integrations.sentence_transformers.factories.STTrainerFactory
+_target_class_: sentence_transformers.trainer.SentenceTransformerTrainer
+args:
+  _target_: sentence_transformers.training_args.SentenceTransformerTrainingArguments
+  output_dir: ${output_dir}/${run_name}
+  run_name: ${run_name}
+  num_train_epochs: 1
+  max_steps: -1 # Set to positive integer to override num_train_epochs
+  learning_rate: 1e-5  # keep this low for fine-tuning
+  per_device_train_batch_size: 2048 # see docs
+  per_device_eval_batch_size: 256 # Purely a speed mechanism
+  gradient_accumulation_steps: 1 # If using a contrastive loss with its own mini batch size, prefer that instead of setting this > 1
+  warmup_ratio: 0.1 # Must be float (0-1) to work with "stretch_lr" option in top level config
+  data_seed: ${seed}
+  bf16: True
+  tf32: True # Support for Ampere+GPUs can lead to 3x speedup at minimal precision loss
+  dataloader_drop_last: False
+  save_total_limit: 2
+  logging_strategy: steps
+  logging_steps: 10
+  report_to: "none"
+  eval_strategy: steps
+  eval_steps: 200
+  save_strategy: steps
+  save_steps: 200
+  load_best_model_at_end: True
+  metric_for_best_model: ir-eval_cosine_mrr@10 # If using an Evaluator, must match the name / key
+  greater_is_better: True
+  optim: adamw_torch_fused
+  dataloader_num_workers: 8
+  ddp_find_unused_parameters: True # True forces a graph travesal every step, only necessary if model has specific layers that are skipped during the forward pass. On Gaudi, True can sometimes interfere with graph compilation optimization. Highly recommended to set False, if possible.
+  remove_unused_columns: False # important to set to False if using a custom collator: by default some trainers may strip dataset columns that do not match the model's forward signature
+  group_by_length: False # Only works if output from dataloader is pre-tokenized. Only usefuly if using applying dynamic padding, groups samples of similar length to minimize padding tokens, saving compute 10-20% compute.
+  gradient_checkpointing: True # In the docs: expect ~20% compute penalty. But, this was probably written from an eager execution perspective on Nvidia chips -> on Gaudi with graphs ON it will be much less!

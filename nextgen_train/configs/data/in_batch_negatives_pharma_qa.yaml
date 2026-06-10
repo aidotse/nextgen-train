@@ -1,0 +1,9 @@
+_target_: nextgen_train.src.data.factories.PharmaQADataFactory
+_target_class_: nextgen_train.src.data.pharma_qa.InBatchNegativesPharmaQAData
+hf_path: nicher92/combined_pharma_qa
+test_size: 0.02
+seed: ${seed}
+sample_pct: 1.0 # Selection is before sharding
+# By default no sharding, take full dataset
+num_shards: 1
+shard_idx: 0

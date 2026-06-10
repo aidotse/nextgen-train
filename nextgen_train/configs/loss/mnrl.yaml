@@ -1,0 +1,3 @@
+_target_: nextgen_train.src.integrations.sentence_transformers.factories.STLossFactory
+_target_class_: sentence_transformers.losses.MultipleNegativesRankingLoss
+scale: 20.0

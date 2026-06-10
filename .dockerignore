@@ -1,0 +1,10 @@
+# Ignore everything by default
+**
+
+# But allow these specific items for the build
+!nextgen_train/
+!scripts/
+!pyproject.toml
+!uv.lock
+!README.md
+!LICENSE.md

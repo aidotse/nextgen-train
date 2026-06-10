@@ -1,0 +1,5 @@
+_target_: nextgen_train.src.integrations.sentence_transformers.factories.STCollatorFactory
+# Most ST losses (MNRL, GIST, Triplet) follow: [Anchor, Positive, Negative], make sure to double check
+columns: [anchor, positive, negative]
+valid_label_columns: ['label']
+max_length: 512

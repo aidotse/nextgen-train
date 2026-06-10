@@ -1,0 +1,7 @@
+_target_: nextgen_train.src.integrations.sentence_transformers.factories.STModelFactory
+model_name_or_path: sentence-transformers/all-MiniLM-L6-v2
+trust_remote_code: true
+revision: c9745ed1d9f207416be6d2e6f8de32d1f16199bf
+model_kwargs:
+  attn_implementation: sdpa # Currently: bug with optimum-habana v1.21 -> need v1.20 to keep this
+  torch_dtype: "bfloat16"

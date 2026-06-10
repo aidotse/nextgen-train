@@ -1,0 +1,49 @@
+_target_: nextgen_train.src.integrations.sentence_transformers.factories.STTrainerFactory
+_target_class_: nextgen_train.src.integrations.sentence_transformers.gaudi_trainer.STGaudiTrainer
+args:
+  _target_: optimum.habana.GaudiTrainingArguments
+  use_habana: True
+  use_lazy_mode: True # Crtical for Gaudi performance
+  use_hpu_graphs_for_training: True # TRUE = Critical for training performance
+  use_hpu_graphs_for_inference: False # Safety measure, a bit slower but more stable for evaluation. Gaudi's graph compiler can be a bit finicky with dynamic eval loops, especially if using a custom Evaluator that may have a more complex control flow.
+  gaudi_config_name: "Habana/bert-base-uncased" # Choose a config thats close to the model architecture
+  throughput_warmup_steps: 3 # Critical. Gaudi's graph compiler needs warmup steps to optimize execution. Without this, initial steps are very slow and logging is skewed.
+  output_dir: ${output_dir}/${run_name}
+  run_name: ${run_name}
+  num_train_epochs: 1
+  max_steps: -1 # Set to positive integer to override num_train_epochs
+  learning_rate: 1e-5  # keep this low for fine-tuning
+  per_device_train_batch_size: 2048 # see docs
+  per_device_eval_batch_size: 256 # Purely a speed mechanism. Lower values may be better because we re-use a static graph
+  gradient_accumulation_steps: 1 # If using a contrastive loss with its own mini batch size, prefer that instead of setting this > 1
+  warmup_ratio: 0.1 # Must be float (0-1) to work with "stretch_lr" option in top level config
+  data_seed: ${seed}
+  bf16: True
+  tf32: False # Support for Ampere+GPUs can lead to 3x speedup at minimal precision loss. Set False for Gaudi.
+  dataloader_drop_last: False # Safety for variable batch sizes during training
+  save_total_limit: null
+  logging_strategy: "no"
+  logging_steps: null
+  report_to: "none"
+  eval_strategy: steps
+  eval_steps: 100
+  save_strategy: "no"
+  save_steps: null
+  load_best_model_at_end: null
+  metric_for_best_model: null
+  greater_is_better: null
+  optim: adamw_torch_fused
+  dataloader_num_workers: 8
+  ddp_find_unused_parameters: False # True forces a graph travesal every step, only necessary if model has specific layers that are skipped during the forward pass. On Gaudi, True can sometimes interfere with graph compilation optimization. Highly recommended to set False, if possible.
+  # CRITICAL DDP + GRADIENT CHECKPOINTING FIX
+  # Set to False to prevent DDP from doing in-place network broadcasts of static model buffers (like BERT's position_ids).
+  # If True, the in-place overwrite artificially bumps the tensor's version counter, causing Gradient Checkpointing
+  # to instantly crash during the backward pass with a "modified by an inplace operation" RuntimeError.
+  #
+  # CAVEAT: 100% safe (and slightly faster) for Transformers which use LayerNorm.
+  # WARNING: If you ever reuse this config for Computer Vision / CNNs, this MUST be set to True!
+  # Batch Normalization relies on these buffers to sync running mean/variance stats across GPUs.
+  ddp_broadcast_buffers: False
+  remove_unused_columns: False # important to set to False if using a custom collator: by default some trainers may strip dataset columns that do not match the model's forward signature
+  group_by_length: False # Only works if output from dataloader is pre-tokenized. Only usefuly if using applying dynamic padding, groups samples of similar length to minimize padding tokens, saving compute 10-20% compute.
+  gradient_checkpointing: True # In the docs: expect ~20% compute penalty. But, this was probably written from an eager execution perspective on Nvidia chips -> on Gaudi with graphs ON it will be much less!

@@ -1,0 +1,12 @@
+_target_: nextgen_train.src.integrations.sentence_transformers.factories.STEvaluatorFactory
+_recursive_: False # We manually create and inject dependencies into the evaluators_cfg objects below
+_target_class_: nextgen_train.src.integrations.sentence_transformers.evaluators.SeqEvaluator
+main_score_idx: 0
+evaluators_cfg:
+  ir_eval:
+    _target_: nextgen_train.src.integrations.sentence_transformers.evaluators.IREvaluator
+    name: "ir-eval"
+  stsb_eval:
+    _target_: nextgen_train.src.integrations.sentence_transformers.evaluators.STSBEvaluator
+    name: "sts-b-dev"
+    write_csv: False  # Bypasses the sentence-transformers bug regarding overlapping keys in sequential evaluators

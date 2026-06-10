@@ -1,0 +1,6 @@
+_target_: nextgen_train.src.logging.factories.ExpLoggerFactory
+_target_class_: nextgen_train.src.logging.mlflow.MLFlowLogger
+experiment: nextgen-train-pharma-qa
+mlruns: '/mnt/mlruns' # Can also set address of running MLFlow server, i.e. "http://localhost:5001"
+run: null # Use this run id, assuming it already exists. Otherwise, it will create a new run and log the experiment under that run
+flatten_sep: "/" # separator for flattening nested dictionaries

@@ -1,0 +1,7 @@
+_target_: nextgen_train.src.integrations.sentence_transformers.factories.STModelFactory
+model_name_or_path: sentence-transformers/all-mpnet-base-v2
+trust_remote_code: true
+revision: e8c3b32edf5434bc2275fc9bab85f82640a19130
+model_kwargs:
+  attn_implementation: "sdpa"
+  torch_dtype: "bfloat16"

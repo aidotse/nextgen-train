@@ -1,0 +1,207 @@
+# Guide for pushing and pulling in this pipeline:
+# https://gitlab.com/guided-explorations/gitlab-ci-yml-tips-tricks-and-hacks/commit-to-repos-during-ci/commit-to-repos-during-ci/-/blob/master/.gitlab-ci.yml
+
+# Imports deployment jobs from the nextgen_framework
+# NOTE: whoever runs the pipeline must be granted at least a 'Reporter' role in the nextgen_framework project
+include:
+  - project: 'nextgeninfra/nextgen_framework'
+    ref: 'main'
+    file: '/templates/aiqu.yml'
+
+
+# Use the top-level 'workflow' keyword to define when pipelines should run.
+# This avoids repeating the same 'rules' block in every job.
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event' && ($CI_MERGE_REQUEST_TARGET_BRANCH_NAME == 'main' || $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == 'release')
+    - if: $CI_PIPELINE_SOURCE == 'web'
+
+stages:
+  - .pre
+  - build
+  - deploy
+
+# --- GLOBAL VARIABLES ---
+
+variables:
+    HTTPS_REMOTE: https://oauth2:$CI_REPO_ACCESS@$CI_SERVER_HOST/$CI_PROJECT_PATH.git
+    GIT_DEPTH: 0
+    CUDA_VISIBLE_DEVICES: ""
+    UV_CACHE_DIR: "$CI_PROJECT_DIR/.uv-cache"
+    UV_LINK_MODE: "copy"
+    UV_COMPILE_BYTECODE: "0"
+    # Naming convention is UV_INDEX_<NAME_OF_INDEX>_USERNAME, see pyproject.toml for NAME_OF_INDEX
+    UV_INDEX_NEXTGEN_USERNAME: "gitlab-ci-token"
+    UV_INDEX_NEXTGEN_PASSWORD: "${CI_JOB_TOKEN}"
+
+
+# --- JOBS ---
+
+aggressive-docker-prune:
+  stage: .pre  # Or any stage that makes sense, but keeping it isolated is good
+  tags:
+    - shell
+  rules:
+    - when: manual
+  allow_failure: true
+  script:
+    # Delete lingering Buildx instances
+    # Every time we run `docker buildx create`, it spins up a hidden container.
+    # This wipes all of them out so they don't stack up infinitely. If caching locally, this kills that advantage.
+    - echo "Removing old Buildx builders..."
+    - for builder in $(docker buildx ls | awk '/docker-container/ {print $1}'); do docker buildx rm -f $builder; done || true
+
+    # The standard system nuke
+    # -a: Removes ALL unused images, not just dangling ones.
+    # --volumes: Wipes out orphaned volumes that containers left behind.
+    # -f: Force, no yes/no prompts.
+    - echo "Pruning system, images, containers, and volumes..."
+    - docker system prune -a -f --volumes
+
+    # The BuildKit Exterminator
+    # BuildKit stores its cache completely separately from standard Docker images.
+    # This explicitly targets the internal BuildKit storage.
+    - echo "Pruning BuildKit internal caches..."
+    - docker builder prune -a -f
+
+    # Space diagnostics on this host
+    - echo "1. Checking GitLab Runner Builds & Caches:"
+    - du -sh $CI_BUILDS_DIR/../../* 2>/dev/null | sort -rh | head -n 5 || true
+
+    - echo "2. Checking Host User Cache (~/.cache):"
+    - du -sh ~/.cache/* 2>/dev/null | sort -rh | head -n 5 || true
+
+    - echo "3. Checking Docker Internal Folders:"
+    - sudo du -sh /var/lib/docker/* 2>/dev/null | sort -rh | head -n 5 || true
+
+    - echo "4. Checking System Logs:"
+    - sudo du -sh /var/log/* 2>/dev/null | sort -rh | head -n 5 || true
+
+    - echo "Cleanup and diagnostics complete! Current disk space:"
+    - df -h /var/lib/docker || df -h /
+
+
+# Requires GIT_SSL_CAINFO to be set in CI/CD Settings > Variables (either at project or group level)
+build-ci-image:
+  stage: .pre
+  tags:
+    - shell
+  before_script:
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_JOB_TOKEN" $CI_REGISTRY
+
+    # Generate the official BuildKit config using the direct path to the CA cert
+    - |
+      cat <<EOF > buildkitd.toml
+      [registry."gitlab.mgmt.ai.se:5050"]
+        ca=["${GIT_SSL_CAINFO}"]
+      EOF
+
+    # Pass the config file directly into the isolated builder
+    - export BUILDER_NAME="nextgen-shared-builder"
+    - docker buildx inspect $BUILDER_NAME > /dev/null 2>&1 || docker buildx create --name $BUILDER_NAME --driver docker-container --config buildkitd.toml
+    - docker buildx use $BUILDER_NAME
+    - docker buildx inspect --bootstrap
+
+  # NOTE: provenance metadata can mess with the Gitlab UI -> turn off unless required!
+  script:
+    - echo "Building custom CI image from docker/ci.Dockerfile..."
+    - |
+      docker buildx build --push \
+        --provenance=false \
+        --secret id=internal_ca,src="${GIT_SSL_CAINFO}" \
+        --cache-from type=registry,ref="$CI_REGISTRY_IMAGE/ci-image:buildcache" \
+        --cache-to type=registry,ref="$CI_REGISTRY_IMAGE/ci-image:buildcache",mode=max \
+        -f docker/ci.base.Dockerfile \
+        -t "$CI_REGISTRY_IMAGE/ci-image:latest" .
+
+  after_script:
+    - echo "Cleaning up local runner ..."
+    - docker image prune -f
+    - docker builder prune -f
+
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+    - if: $CI_PIPELINE_SOURCE == 'web'
+
+
+# Gets the starting code version when pipeline is run. Sets `APP_VERSION` AND `TAG_VERSION`
+get-initial-version:
+  stage: .pre
+  image:
+    name: $CI_REGISTRY_IMAGE/ci-image:latest
+    pull_policy: always
+  needs: ["build-ci-image"]
+  script:
+    - RAW_VERSION=$(poe get-latest-tag)
+    - echo "Found $RAW_VERSION"
+    - echo "APP_VERSION=${RAW_VERSION#v}" >> version.env
+    - echo "TAG_VERSION=$RAW_VERSION" >> version.env
+  artifacts:
+    reports:
+      dotenv: version.env
+
+# Build and push the Docker image to the GitLab Container Registry.
+# NOTE: the two jobs are bundled here, because the image is too large for passing around as a .tar
+build-and-push-image:
+  stage: build
+  tags:
+    - shell
+  needs:
+    - job: get-initial-version  # Gets $APP_VERSION
+    #- job: version-and-tag      # Gets $BUMPED_VERSION (if the job ran)
+  script:
+    # Unset the DOCKER_HOST variable to force the client to use the local daemon.
+    - unset DOCKER_HOST
+    # Login to the GitLab Container Registry using a short-lived, secure job token.
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_JOB_TOKEN" $CI_REGISTRY
+
+    # Generate the official BuildKit config to trust the internal CA cert
+    - |
+      cat <<EOF > buildkitd.toml
+      [registry."gitlab.mgmt.ai.se:5050"]
+        ca=["${GIT_SSL_CAINFO}"]
+      EOF
+
+    - FINAL_VERSION=${BUMPED_VERSION:-$APP_VERSION}
+    - echo "Building Docker image with code version $FINAL_VERSION..."
+
+    # Spin up the shared builder and feed it the config file
+    - export BUILDER_NAME="nextgen-shared-builder"
+    - docker buildx inspect $BUILDER_NAME > /dev/null 2>&1 || docker buildx create --name $BUILDER_NAME --driver docker-container --config buildkitd.toml
+    - docker buildx use $BUILDER_NAME
+    - docker buildx inspect --bootstrap
+
+    # Build the image and tag it securely
+    # NOTE: provenance metadata can mess with the Gitlab UI -> turn off unless required!
+    - |
+      docker buildx build --push \
+        --provenance=false \
+        --secret id=internal_ca,src="${GIT_SSL_CAINFO}" \
+        --secret id=uv_username,env=UV_INDEX_NEXTGEN_USERNAME \
+        --secret id=uv_password,env=UV_INDEX_NEXTGEN_PASSWORD \
+        --build-arg VERSION="$FINAL_VERSION" \
+        --cache-from type=registry,ref="$CI_REGISTRY_IMAGE:buildcache" \
+        --cache-to type=registry,ref="$CI_REGISTRY_IMAGE:buildcache",mode=max \
+        -f docker/Dockerfile \
+        -t "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA" \
+        -t "$CI_REGISTRY_IMAGE:latest" .
+
+  after_script:
+    - echo "Cleaning up local runner ..."
+    - docker image prune -f
+    - docker builder prune -f
+
+
+# --- NEXTGEN AIQU INTEGRATION ---
+
+deploy-aiqu:
+  stage: deploy
+  extends: .deploy-node
+  variables:
+    # This URL is tightly coupled to how AiQU / the scheduler works: full URL vs. relative path to a whitelisted domain
+    IMAGE: $CI_PROJECT_PATH:$CI_COMMIT_SHORT_SHA
+    QID: 23
+    STORAGE_ID: 225
+    #STORAGE_SOURCE: dummy
+    #STORAGE_TO: dummy
+    MLFLOW_API_TOKEN: "$GITLAB_MLFLOW"

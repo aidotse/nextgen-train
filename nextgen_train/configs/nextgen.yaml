@@ -1,0 +1,25 @@
+defaults:
+  - _self_
+  - framework: framework
+  - nextgen_trainer: fedavg
+  - model: st_all-mpnet-base-v2
+  #- model@guide: st_all-mpnet-base-v2 # If necessary add like `+model@guide = ....`
+  - callbacks: st_trainer
+  - data: mined_negatives_pharma_qa
+  - collator: st_contrastive_collator
+  - trainer: st_trainer_fed
+  - loss: cached_gist_embed
+  - evaluator: st_ir_anisotropy
+  - logger: mlflow
+
+run_name: "" # Leave empty to auto generate
+output_dir: ./output-nextgen/
+device: 'cuda' # 'hpu' for Gaudi
+seed: 52
+verbose_cli: False
+skip_fl: False # If True, a clients just jump straight to training rather than integrating into the FL loop
+stretch_lr: False # If True, creates an LR schedule that spans the totality of steps across all learning iterations in the FL loop. Otherwise a new LR schedule is created in each iteration.
+
+hydra:
+  searchpath:
+    - "pkg://nextgen_framework/config"

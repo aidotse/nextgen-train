@@ -1,0 +1,105 @@
+site_name: "nextgen-train"
+site_author: "Mauricio Munoz"
+site_description: "LLM training for NextGen"
+site_url: "https://pages.mgmt.ai.se/nextgeninfra/nextgen-train/"
+repo_url: "https://gitlab.mgmt.ai.se/nextgeninfra/nextgen-train"
+site_dir: public
+
+nav:
+  - Home: index.md
+  - Getting Started: setup.md
+  - Pharmaceutical RAG: pharma.md
+  - Development:
+    - Contributing: CONTRIBUTING.md
+    - Coverage: exported/coverage
+    - Tests: exported/pytest.html
+  - License: LICENSE.md
+
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - meta
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem
+  - pymdownx.caret
+  - pymdownx.mark
+  - pymdownx.tilde
+  - pymdownx.details
+  - pymdownx.superfences
+
+extra_javascript:
+  - javascripts/mathjax.js
+  - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js
+
+
+theme:
+  name: material
+  logo: assets/dark_blue.svg
+  icon:
+    repo: fontawesome/brands/git-alt
+  font: false
+  palette:
+    - scheme: slate
+      accent: blue
+      media: "(prefers-color-scheme: dark)"
+      primary: amber
+      toggle:
+        icon: material/brightness-7
+        name: Switch to light mode
+    - scheme: default
+      accent: blue
+      media: "(prefers-color-scheme: dark)"
+      primary: amber
+      toggle:
+        icon: material/brightness-4
+        name: Switch to dark mode
+  features:
+    - header.autohide
+    - navigation.indexes
+    - navigation.instant
+    - navigation.instant.prefetch
+    - navigation.instant.progress
+    - navigation.instant.preview
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.expand
+    - navigation.path
+    - navigation.prune
+    - navigation.top
+    - toc.follow
+    - toc.integrate
+    - content.action.edit
+    - content.action.view
+    - content.code.copy
+    - search
+    - search.highlight
+    - search.suggest
+    - tags
+
+extra:
+  version:
+    provider: mike
+    alias: true
+  social:
+    - icon: fontawesome/solid/newspaper
+      link: https://www.ai.se/en/newsletter
+    - icon: fontawesome/brands/linkedin
+      link: https://www.linkedin.com/company/aisweden
+    - icon: simple/youtube
+      link: https://www.youtube.com/channel/UC9tI59qEGKS_v1PMfWyGY1Q
+    - icon: simple/github
+      link: https://github.com/aidotse
+    - icon: simple/spotify
+      link: https://open.spotify.com/show/7z6xGzWQosx3346tpscfQc?si=81DsYQJVSNOO3diHMzoMFQ&nd=1&dlsi=6833fe515dc047b0
+
+copyright: Copyright &copy; 2025 AI Sweden

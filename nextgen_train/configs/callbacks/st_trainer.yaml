@@ -1,0 +1,9 @@
+# A Dictionary of Callbacks
+# Key = Name (arbitrary), Value = Instantiation Target
+
+cli_logger:
+  _target_: nextgen_train.src.logging.factories.CLILoggerTrainerCallbackFactory
+
+exp_logger:
+  _target_: nextgen_train.src.logging.factories.ExpLoggerTrainerCallbackFactory
+  _target_class_: nextgen_train.src.logging.mlflow.MLFlowTrainerCallback

@@ -1,0 +1,5 @@
+_target_: nextgen_train.src.integrations.sentence_transformers.factories.STEvaluatorFactory
+_target_class_: nextgen_train.src.integrations.sentence_transformers.evaluators.IREvaluator
+name: ir-eval
+batch_size: 32
+show_progress_bar: True
